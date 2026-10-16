@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>@retdik — Raw Client</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b82f6'/%3E%3Cpath d='M9 16l5 5 9-10' stroke='white' stroke-width='2.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --accent:#3b82f6;--accent-hover:#60a5fa;--accent-dim:#1d4ed8;
+    --bg:#0a0a0f;--card:#111118;--border:#252540;
+    --txt:#f0f0ff;--muted:#6b6b8a;--soft:#a0a0c0;
+    --green:#22c55e;--green-glow:rgba(34,197,94,.4);
+    --red:#f87171;--amber:#fbbf24;
+  }
+  *{box-sizing:border-box;scrollbar-width:thin;scrollbar-color:#3d3d5c #111118}
+  *::-webkit-scrollbar{width:6px;height:6px}
+  *::-webkit-scrollbar-thumb{background:#3d3d5c;border-radius:4px}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:'Inter',system-ui,sans-serif;min-height:100vh}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .dot.green{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+  .dot.amber{background:var(--amber);box-shadow:0 0 6px var(--amber)}
+  .dot.red{background:var(--red);box-shadow:0 0 6px var(--red)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:inline-block}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .editor{border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card);box-shadow:0 8px 32px rgba(0,0,0,.5);transition:border-color .2s}
+  .editor:focus-within{border-color:var(--accent)}
+  textarea{width:100%;height:280px;background:#0d0d14;border:none;padding:1rem 1.1rem;color:var(--green);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.85rem;resize:vertical;outline:none;line-height:1.55}
+  textarea::placeholder{color:#3d3d5c}
+  input[type=text]{width:100%;background:#0d0d14;border:1px solid #3d3d5c;border-radius:8px;padding:8px 12px;color:var(--txt);font-size:.85rem;outline:none;transition:border-color .2s}
+  input[type=text]:focus{border-color:var(--accent)}
+  .result{display:none;margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid #252540}
+  .result.show{display:block}
+  .urlrow{display:flex;gap:.5rem;margin-bottom:.6rem}
+  .urlrow input{flex:1;font-family:ui-monospace,monospace;font-size:.8rem;color:var(--soft)}
+  .ls-box{background:#0d0d14;border:1px solid #252540;border-radius:8px;padding:.85rem 1rem;font-family:ui-monospace,monospace;font-size:.8rem;color:var(--green);word-break:break-all}
+  .err{display:none;background:#2a1515;border:1px solid #5c2020;border-radius:8px;padding:.75rem 1rem;color:#fca5a5;font-size:.85rem;white-space:pre-wrap}
+  .err.show{display:block}
+  .ok{display:none;background:#0f1830;border:1px solid #1e3a8a;border-radius:8px;padding:.6rem 1rem;color:#93c5fd;font-size:.78rem;margin-bottom:.75rem}
+  .ok.show{display:block}
+  .feat{display:grid;grid-template-columns:1fr;gap:.75rem;margin-bottom:1.5rem}
+  @media(min-width:640px){.feat{grid-template-columns:repeat(3,1fr)}}
+  .fcard{background:#111118;border:1px solid #252540;border-radius:10px;padding:.9rem 1rem}
+  .fcard .t{font-size:.8rem;font-weight:600;color:var(--txt);margin-bottom:.25rem}
+  .fcard .d{font-size:.72rem;color:var(--muted);line-height:1.4}
+
+  /* ===== MODAL ===== */
+  .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);z-index:100;align-items:center;justify-content:center;padding:1.5rem}
+  .modal.show{display:flex}
+  .mcard{background:#16161f;border:1px solid #2a2a3d;border-radius:18px;padding:2rem 1.75rem;max-width:400px;width:100%;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,.7);animation:pop .25s ease-out}
+  @keyframes pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
+  .mcard h2{font-size:1.2rem;font-weight:700;color:#fff;margin:0 0 .6rem}
+  .mcard p{font-size:.88rem;color:var(--soft);line-height:1.5;margin:0 0 1.5rem}
+  .mactions{display:flex;gap:.75rem;justify-content:center}
+  .mactions button{flex:1}
+  .btn-o{background:transparent;color:var(--soft);padding:10px 20px;border-radius:10px;border:1px solid #3d3d5c;cursor:pointer;font-size:.9rem;font-weight:600;transition:all .2s}
+  .btn-o:hover{border-color:var(--muted);color:var(--txt)}
+  .btn-p{background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:#fff;padding:10px 20px;border-radius:10px;border:none;cursor:pointer;font-size:.9rem;font-weight:600;display:inline-flex;align-items:center;gap:8px;transition:all .2s}
+  .btn-p:hover{background:var(--accent-hover)}
+  .btn-p:disabled{opacity:.6;cursor:not-allowed}
+  .btn-s{background:#1a1a28;color:var(--soft);padding:6px 12px;border-radius:6px;border:1px solid #3d3d5c;cursor:pointer;font-size:.75rem;font-weight:600;transition:all .2s}
+  .btn-s:hover{border-color:var(--muted);color:var(--txt)}
+  .btn-s.copied,.btn-s.copied:hover{background:var(--green);border-color:var(--green);color:#052e16;box-shadow:0 0 0 3px var(--green-glow);animation:popGreen .35s ease-out}
+  @keyframes popGreen{0%{transform:scale(.94)}60%{transform:scale(1.05)}100%{transform:scale(1)}}
+  .hidden{display:none!important}
+  .label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:.4rem;display:block}
+  .svc{display:inline-block;background:#0f1830;color:#93c5fd;border:1px solid #1e3a8a;border-radius:6px;padding:2px 8px;font-size:.7rem;font-weight:700;margin-left:6px}
+
+  /* ===== MAINTENANCE MODAL ===== */
+  #maintenanceModal .mcard{
+    border-color:#5c3b20;
+    background:linear-gradient(180deg,#1a1310,#16161f 60%);
+  }
+  .maint-icon{
+    width:64px;height:64px;margin:0 auto 1.2rem;
+    background:linear-gradient(135deg,#f59e0b,#b45309);
+    border-radius:18px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 12px 32px rgba(245,158,11,.35);
+    animation:wobble 1.8s ease-in-out infinite;
+  }
+  @keyframes wobble{
+    0%,100%{transform:rotate(-3deg)}
+    50%{transform:rotate(3deg)}
+  }
+  #maintenanceModal h2{color:#fbbf24}
+  #maintenanceModal .badge-maint{
+    display:inline-block;background:#3a2205;color:#fbbf24;
+    border:1px solid #78350f;border-radius:999px;
+    padding:3px 12px;font-size:.7rem;font-weight:800;
+    letter-spacing:.1em;text-transform:uppercase;margin-bottom:.9rem;
+  }
+</style>
+</head>
+<body>
+
+<header style="position:sticky;top:0;border-bottom:1px solid #252540;background:rgba(17,17,24,.8);backdrop-filter:blur(12px);padding:.75rem 1rem;z-index:50">
+  <div style="max-width:48rem;margin:0 auto;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <div style="width:2.25rem;height:2.25rem;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(59,130,246,.35)">
+        <svg style="width:1.5rem;height:1.5rem;color:#fff" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 style="font-size:1.25rem;font-weight:700;color:#fff;margin:0;line-height:1.25"><span style="color:var(--accent)">@retdik</span></h1>
+        <p style="font-size:.75rem;color:var(--muted);margin:0;font-weight:500">Client‑Ready Raw</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:.5rem;font-size:.875rem;color:var(--soft)">
+      <span class="dot green" id="hdr-dot"></span>
+      <span id="hdr-status">Ready</span>
+    </div>
+  </div>
+</header>
+
+<main style="max-width:48rem;margin:0 auto;padding:1.75rem 1rem 3rem">
+
+  <div class="feat">
+    <div class="fcard"><div class="t"><span style="color:var(--accent)">⚡</span> Chạy trên client</div><div class="d">Raw plain‑text, executor HttpGet được.</div></div>
+    <div class="fcard"><div class="t"><span style="color:var(--accent)">🔑</span> Không cần API riêng</div><div class="d">Key tích hợp sẵn, chỉ cần bấm nút.</div></div>
+    <div class="fcard"><div class="t"><span style="color:var(--accent)">🛟</span> 4 lớp dự phòng</div><div class="d">paste.gg → Pantry → dpaste → paste.rs.</div></div>
+  </div>
+
+  <div style="background:#111118;border:1px solid #252540;border-radius:.75rem;padding:1rem;box-shadow:0 20px 25px -5px rgba(0,0,0,.35)">
+    <span class="label">Tên script (tuỳ chọn)</span>
+    <input type="text" id="name" placeholder="vd: auto-farm, key-system..." maxlength="64" style="margin-bottom:.75rem">
+
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.5rem">
+      <span class="label" style="margin:0">Code (Lua / Luau)</span>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn-s" id="btnUpload" type="button">📁 Upload</button>
+        <button class="btn-s" id="btnClear" type="button">✕ Clear</button>
+      </div>
+      <input type="file" id="fileInput" accept=".lua,.txt,.luau" style="display:none">
+    </div>
+
+    <div class="editor"><textarea id="code" placeholder="-- Dán code Lua / Luau của bạn ở đây..."></textarea></div>
+
+    <div style="display:flex;justify-content:space-between;margin-top:.4rem;font-size:.75rem;color:var(--muted)">
+      <span>Ký tự: <span id="count">0</span></span>
+      <span id="sizeWarn" style="color:var(--amber);display:none">⚠️ Code lớn, có thể bị chậm</span>
+    </div>
+
+    <div style="display:flex;gap:.75rem;margin-top:1rem">
+      <button class="btn-p" id="btn" style="flex:1;justify-content:center">
+        <span class="spin hidden" id="btn-spin"></span>
+        <span id="btn-label">Tạo Raw cho Client</span>
+      </button>
+    </div>
+
+    <div class="err" id="error" style="margin-top:1rem"></div>
+
+    <div class="result" id="result">
+      <div class="ok show" id="okBanner">✓ Đã tạo raw thành công<span class="svc" id="svcBadge">—</span></div>
+
+      <span class="label">Link raw (client)</span>
+      <div class="urlrow">
+        <input type="text" id="rawUrl" readonly>
+        <button class="btn-s" data-copy="rawUrl" style="white-space:nowrap">Copy</button>
+      </div>
+
+      <span class="label" style="margin-top:.75rem">Loadstring</span>
+      <div class="ls-box" id="loadstring"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:.75rem;gap:.5rem">
+        <button class="btn-s" id="btnOpen">🔗 Mở link</button>
+        <button class="btn-s" data-copy="loadstring">Copy Loadstring</button>
+      </div>
+
+      <p style="font-size:.75rem;color:var(--muted);margin-top:.9rem;line-height:1.55">
+        <strong style="color:var(--soft)">Lưu ý:</strong> Hệ thống tự thử lần lượt các dịch vụ — nếu cái đầu lỗi sẽ tự chuyển sang cái tiếp theo. Nếu ra <code>Pantry (JSON)</code> thì link đó trả về JSON, không phải plain‑text.
+      </p>
+
+      <div style="display:flex;justify-content:flex-end;margin-top:.5rem">
+        <button class="btn-s" id="btnReset">↺ Tạo cái khác</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer style="border-top:1px solid #252540;background:rgba(17,17,24,.5);padding:1rem;text-align:center;font-size:.75rem;color:var(--muted)">
+  @retdik · Client‑Ready Raw
+</footer>
+
+<!-- ============ PROTECT MODAL ============ -->
+<div class="modal" id="protectModal">
+  <div class="mcard">
+    <div style="width:48px;height:48px;margin:0 auto 1.1rem;background:linear-gradient(135deg,#3b82f6,#1d4ed8);border-radius:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(59,130,246,.35)">
+      <svg style="width:24px;height:24px;color:#fff" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+      </svg>
+    </div>
+    <h2>Bạn có muốn bảo vệ script không?</h2>
+    <p>Chọn <strong style="color:var(--accent-hover)">Có</strong> để obfuscate.<br>Chọn <strong>Không</strong> để tạo raw link bằng API tích hợp.</p>
+    <div class="mactions">
+      <button class="btn-o" id="btnNo">Không</button>
+      <button class="btn-p" id="btnYes" style="justify-content:center">Có</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MAINTENANCE MODAL ============ -->
+<div class="modal" id="maintenanceModal">
+  <div class="mcard">
+    <div class="maint-icon">
+      <svg style="width:32px;height:32px;color:#fff" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.34 3.94l-1.72 1.72m8.98-1.72l1.72 1.72M12 8v4l3 2m-3 7a9 9 0 110-18 9 9 0 010 18z"/>
+      </svg>
+    </div>
+    <span class="badge-maint">🔧 Bảo trì</span>
+    <h2>Bạn không thể vào lúc này</h2>
+    <p>
+      Tính năng obfuscate đang trong quá trình <strong style="color:#fbbf24">bảo trì</strong>.<br>
+      Vui lòng quay lại sau hoặc chọn <strong>Không</strong> để tạo raw link trực tiếp.
+    </p>
+    <div class="mactions">
+      <button class="btn-p" id="btnMaintClose" style="justify-content:center">Đã hiểu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const LAMECHER_API_KEY = 'f47e5369-93bf-4e81-99f7-4d542cfdb3a2';
+
+/* ================= HELPERS ================= */
+const $ = id => document.getElementById(id);
+
+/* ================= DOM ================= */
+const codeEl = $('code'), countEl = $('count'), sizeWarn = $('sizeWarn');
+const btn = $('btn'), btnSpin = $('btn-spin'), btnLabel = $('btn-label');
+const result = $('result'), errorEl = $('error'), rawUrlEl = $('rawUrl');
+const loadstringEl = $('loadstring'), hdrDot = $('hdr-dot'), hdrStatus = $('hdr-status');
+const protectModal = $('protectModal'), svcBadge = $('svcBadge');
+const maintenanceModal = $('maintenanceModal');
+
+/* ================= EDITOR ================= */
+codeEl.addEventListener('input', () => {
+  const n = codeEl.value.length;
+  countEl.textContent = n.toLocaleString();
+  sizeWarn.style.display = n > 200000 ? 'inline' : 'none';
+});
+
+/* ================= UPLOAD / CLEAR / DnD ================= */
+const fileInput = $('fileInput');
+$('btnUpload').addEventListener('click', () => fileInput.click());
+$('btnClear').addEventListener('click', () => {
+  codeEl.value = ''; countEl.textContent = '0';
+  sizeWarn.style.display = 'none';
+  result.classList.remove('show'); errorEl.classList.remove('show');
+});
+fileInput.addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value=''; });
+function loadFile(f){
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    codeEl.value = e.target.result;
+    countEl.textContent = codeEl.value.length.toLocaleString();
+    sizeWarn.style.display = codeEl.value.length > 200000 ? 'inline' : 'none';
+  };
+  r.readAsText(f);
+}
+const dz = document.querySelector('.editor');
+['dragover','dragenter'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.style.borderColor = 'var(--accent)'; }));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.style.borderColor = ''; }));
+dz.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+
+/* ================= CREATE FLOW ================= */
+btn.addEventListener('click', () => {
+  if (!codeEl.value.trim()) { showErr('Hãy dán code trước đã.'); return; }
+  errorEl.classList.remove('show');
+  protectModal.classList.add('show');
+});
+
+/* ---- CÓ: hiện bảng bảo trì (không chuyển link) ---- */
+$('btnYes').addEventListener('click', () => {
+  protectModal.classList.remove('show');
+  maintenanceModal.classList.add('show');
+});
+
+/* ---- KHÔNG: tạo raw bằng API tích hợp ---- */
+$('btnNo').addEventListener('click', () => {
+  protectModal.classList.remove('show');
+  createRaw();
+});
+
+/* ---- Đóng modals khi click nền ---- */
+protectModal.addEventListener('click', e => { if (e.target === protectModal) protectModal.classList.remove('show'); });
+maintenanceModal.addEventListener('click', e => { if (e.target === maintenanceModal) maintenanceModal.classList.remove('show'); });
+$('btnMaintClose').addEventListener('click', () => maintenanceModal.classList.remove('show'));
+
+/* ================= MULTI-SERVICE PASTE ================= */
+async function tryPasteGG(code, name){
+  const res = await fetch('https://api.paste.gg/v1/pastes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Key ' + LAMECHER_API_KEY
+    },
+    body: JSON.stringify({
+      files: [{
+        name: (name || 'script') + '.lua',
+        content: { format: 'text', value: code }
+      }]
+    })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  const pasteId = data?.result?.id;
+  const fileId  = data?.result?.files?.[0]?.id;
+  if (!pasteId || !fileId) throw new Error('Phản hồi không hợp lệ');
+  return {
+    url: 'https://api.paste.gg/v1/pastes/' + pasteId + '/files/' + fileId + '/raw',
+    service: 'paste.gg'
+  };
+}
+
+async function tryPantry(code, name){
+  const basket = 'lame_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+  const url = 'https://getpantry.cloud/apiv1/pantry/' + LAMECHER_API_KEY + '/basket/' + basket;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, name, ts: Date.now() })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return { url, service: 'Pantry (JSON)' };
+}
+
+async function tryDpaste(code, name){
+  const form = new URLSearchParams();
+  form.append('content', code);
+  form.append('syntax', 'text');
+  form.append('expiry_days', '365');
+  form.append('title', name || 'script');
+  const res = await fetch('https://dpaste.com/api/v2/', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': 'LamecherBot/1.0'
+    },
+    body: form
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const u = (await res.text()).trim();
+  if (!/^https?:\/\//.test(u)) throw new Error('URL không hợp lệ');
+  return { url: u.replace(/\/$/, '') + '/raw', service: 'dpaste.com' };
+}
+
+async function tryPasteRS(code){
+  const res = await fetch('https://paste.rs/', {
+    method: 'POST',
+    body: code,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const u = (await res.text()).trim();
+  if (!/^https?:\/\//.test(u)) throw new Error('URL không hợp lệ');
+  return { url: u, service: 'paste.rs' };
+}
+
+async function saveToAnyService(code, name){
+  const errors = [];
+  const attempts = [
+    ['paste.gg', () => tryPasteGG(code, name)],
+    ['Pantry',   () => tryPantry(code, name)],
+    ['dpaste',   () => tryDpaste(code, name)],
+    ['paste.rs', () => tryPasteRS(code)]
+  ];
+
+  for (const [label, fn] of attempts){
+    try {
+      hdrStatus.textContent = 'Đang thử ' + label + '...';
+      const r = await fn();
+      return r;
+    } catch(e){
+      errors.push('• ' + label + ': ' + (e.message || e));
+    }
+  }
+  throw new Error('Tất cả dịch vụ đều lỗi:\n' + errors.join('\n'));
+}
+
+/* ================= CREATE RAW ================= */
+async function createRaw(){
+  btn.disabled = true; btnSpin.classList.remove('hidden');
+  btnLabel.textContent = 'Đang tạo...';
+  result.classList.remove('show');
+  hdrDot.className = 'dot amber'; hdrStatus.textContent = 'Đang gửi...';
+  errorEl.classList.remove('show');
+
+  try {
+    const code = codeEl.value;
+    const name = $('name').value.trim() || 'untitled';
+    const out  = await saveToAnyService(code, name);
+
+    rawUrlEl.value = out.url;
+    loadstringEl.textContent = 'loadstring(game:HttpGet("' + out.url + '"))()';
+    svcBadge.textContent = out.service;
+    result.classList.add('show');
+
+    hdrDot.className = 'dot green';
+    hdrStatus.textContent = 'Ready · ' + out.service;
+  } catch(e){
+    showErr('Không tạo được raw:\n\n' + (e.message || e));
+    hdrDot.className = 'dot red'; hdrStatus.textContent = 'Lỗi';
+  } finally {
+    btn.disabled = false; btnSpin.classList.add('hidden');
+    btnLabel.textContent = 'Tạo Raw cho Client';
+  }
+}
+
+$('btnOpen').addEventListener('click', () => { if (rawUrlEl.value) window.open(rawUrlEl.value, '_blank'); });
+$('btnReset').addEventListener('click', () => {
+  result.classList.remove('show'); codeEl.value = ''; countEl.textContent = '0';
+  sizeWarn.style.display = 'none'; $('name').value = '';
+  hdrDot.className = 'dot green'; hdrStatus.textContent = 'Ready';
+  codeEl.focus();
+});
+function showErr(m){ errorEl.textContent = m; errorEl.classList.add('show'); }
+
+/* ================= COPY (xanh lá 3s) ================= */
+document.querySelectorAll('[data-copy]').forEach(b => {
+  b.addEventListener('click', async () => {
+    const id = b.dataset.copy;
+    const text = id === 'loadstring' ? loadstringEl.textContent : $(id).value;
+    if (!text) return;
+
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+    }
+
+    if (b._t) clearTimeout(b._t);
+    const orig = b.dataset.orig || b.textContent;
+    b.dataset.orig = orig;
+    b.textContent = '✓ Đã copy';
+    b.classList.add('copied');
+    b._t = setTimeout(() => {
+      b.classList.remove('copied');
+      b.textContent = orig;
+      b._t = null;
+    }, 3000);
+  });
+});
+</script>
+</body>
+</html>
